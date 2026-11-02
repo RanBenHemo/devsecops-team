@@ -114,6 +114,16 @@ def test_llm_invalid_action_exits_with_2(capsys, monkeypatch):
     assert json.loads(capsys.readouterr().out)["status"] == "invalid_action"
 
 
+def test_an_unexpected_crash_exits_with_2_not_1(capsys, monkeypatch):
+    # Python's own exit code after a crash is 1, which a script would read as "real findings".
+    def broken_write(report):
+        raise OSError("disk full")
+    monkeypatch.setattr("main.write_report", broken_write)
+
+    assert main(["review", "samples/clean.py"]) == 2
+    assert capsys.readouterr().err.strip().endswith("error: unexpected OSError: disk full")
+
+
 # ---------- --fix ----------
 
 def test_fix_prints_both_reports(capsys):

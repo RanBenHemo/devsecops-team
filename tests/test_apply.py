@@ -112,6 +112,37 @@ def test_apply_refuses_a_file_outside_the_project(project, tmp_path, capsys):
     assert (tmp_path / "outside.py").read_text() == "x = 1\n"
 
 
+def edit_first_card(**fields):
+    def edit(report):
+        report["cards"][0].update(fields)
+        return report
+    return edit
+
+
+# Each of these crashed with a traceback (exit 1, "real findings") before the report was checked.
+@pytest.mark.parametrize("edit, reason", [
+    (lambda report: [], "the report is malformed: it is not a JSON object"),
+    (lambda report: {**report, "cards": "F1"}, "cards must be a list of objects with a string id"),
+    (lambda report: {**report, "cards": [None]}, "cards must be a list of objects with a string id"),
+    (lambda report: {**report, "cards": [{"status": "ready"}]}, "cards must be a list of objects with a string id"),
+    (lambda report: {k: v for k, v in report.items() if k != "sha256"}, "file and sha256 must be strings"),
+    (edit_first_card(status=None), "F1 is not ready (status None)"),
+    (edit_first_card(change=None), "F1 is malformed: it has no change"),
+    (edit_first_card(change={**SECRET_FIX, "start_line": "5"}), "change needs int start_line"),
+    (edit_first_card(line=None), "it needs a string rule and an int line"),
+    (edit_first_card(sources=[{"tool": "bandit"}]), "sources must be a list of objects with a string rule"),
+])
+def test_apply_refuses_a_malformed_report(project, tmp_path, capsys, edit, reason):
+    report = json.loads(open(project["report"], encoding="utf-8").read())
+    path = tmp_path / "edited.json"
+    path.write_text(json.dumps(edit(report)), encoding="utf-8")
+    before = sha256(project["target"])
+
+    assert main(["apply", str(path), "--ids", "F1"]) == 3
+    assert reason in capsys.readouterr().out
+    assert sha256(project["target"]) == before
+
+
 def test_apply_refuses_an_unreadable_report(project, tmp_path, capsys):
     assert main(["apply", str(tmp_path / "missing.json"), "--ids", "F1"]) == 3
     assert "cannot read the report" in capsys.readouterr().out

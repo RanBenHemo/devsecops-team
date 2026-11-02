@@ -21,14 +21,20 @@ def apply_report(report_path, ids):
         report = json.loads(Path(report_path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return _refuse(f"cannot read the report {report_path}")
-    cards = {card["id"]: card for card in report.get("cards", [])}
+    problem = _report_problem(report)
+    if problem:
+        return _refuse(f"the report is malformed: {problem}")
+    cards = {card["id"]: card for card in report["cards"]}
     if not ids:
         return _refuse("no ids were chosen")
     for card_id in ids:
         if card_id not in cards:
             return _refuse(f"{card_id} is not in the report")
-        if cards[card_id]["status"] != "ready":
-            return _refuse(f"{card_id} is not ready (status {cards[card_id]['status']})")
+        if cards[card_id].get("status") != "ready":
+            return _refuse(f"{card_id} is not ready (status {cards[card_id].get('status')})")
+        problem = _card_problem(cards[card_id])
+        if problem:
+            return _refuse(f"{card_id} is malformed: {problem}")
     chosen = sorted((cards[card_id] for card_id in ids), key=lambda card: card["change"]["start_line"])
 
     source = resolve_in_project(report["file"])
@@ -77,6 +83,34 @@ def _check_combined(file_path, chosen):
     if tests["ok"]:
         checks["works"], checks["attack"] = tests["works"], tests["attack"]
     return failed_checks(checks)
+
+
+def _report_problem(report):
+    """What is wrong with the report's shape, or None. A hand-edited report is refused, never a crash."""
+    if not isinstance(report, dict):
+        return "it is not a JSON object"
+    if not isinstance(report.get("file"), str) or not isinstance(report.get("sha256"), str):
+        return "file and sha256 must be strings"
+    cards = report.get("cards")
+    if not isinstance(cards, list) or not all(isinstance(c, dict) and isinstance(c.get("id"), str) for c in cards):
+        return "cards must be a list of objects with a string id"
+    return None
+
+
+def _card_problem(card):
+    """What is wrong with a chosen card's fields, or None."""
+    change = card.get("change")
+    if not isinstance(change, dict):
+        return "it has no change"
+    if (type(change.get("start_line")) is not int or type(change.get("end_line")) is not int
+            or not isinstance(change.get("replacement"), str)):
+        return "change needs int start_line, int end_line and str replacement"
+    if not isinstance(card.get("rule"), str) or type(card.get("line")) is not int:
+        return "it needs a string rule and an int line"
+    sources = card.get("sources", [])
+    if not isinstance(sources, list) or not all(isinstance(s, dict) and isinstance(s.get("rule"), str) for s in sources):
+        return "sources must be a list of objects with a string rule"
+    return None
 
 
 def _refuse(reason):
