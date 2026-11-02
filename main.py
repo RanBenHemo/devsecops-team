@@ -12,7 +12,7 @@ Usage:
 
 Exit code: 0 = no real findings (apply: applied), 1 = at least one real finding,
            2 = error, a run that did not end in final, a failed developer or tester run,
-               or the run deadline passed before the work was done,
+               the run deadline passed before the work was done, or an unexpected crash,
            3 = apply refused (the reason is printed).
 """
 
@@ -47,6 +47,15 @@ MODELS = {
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else list(argv)
+    try:
+        return run_command(argv)
+    except Exception as error:
+        # Python exits with 1 after a crash, and 1 means "real findings" to a script. Make it 2.
+        print(f"error: unexpected {type(error).__name__}: {error}", file=sys.stderr)
+        return 2
+
+
+def run_command(argv):
     if argv and argv[0] == "review":
         return review_command(argv[1:])
     if argv and argv[0] == "apply":
