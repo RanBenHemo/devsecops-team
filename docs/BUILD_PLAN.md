@@ -1,6 +1,11 @@
 # BUILD_PLAN.md — instructions for Claude Code
 
-Version 3.1, 22.11.2026. Replaces version 2 completely. Save it over `docs/BUILD_PLAN.md`.
+Version 3.2, 22.11.2026. Replaces version 3.1. Save it over `docs/BUILD_PLAN.md`.
+
+What changed from 3.1: the tool failures, the loop and the conversation separation now
+follow the code of the lesson 4 and lesson 5 notebooks; Chen owns three steps (M3, M6,
+M8); the repo layout question is settled. M0, with the Colab notebook, was built from
+version 3.1 on the branch `step7-colab-ready`.
 
 Version 3 puts **milestone 1** first. The lecturer published its requirements sheet
 after version 2 was written, and some of its requirements change earlier decisions
@@ -110,6 +115,24 @@ comes from a real run or from a scripted/mock run.
   `build_messages`) and, for each finding, five source lines on each side.
 - Class notebooks use `pydantic` (lesson 3, `extra="forbid"`) and `google-genai`.
   The project uses neither today.
+- **Lesson 4 notebook** (`state_machine_reference.py` explained): tools raise
+  `ToolError(code, retryable)`; `MAX_ATTEMPTS = 3`; `execute` checks the step budget
+  first, then repeat detection (a signature of every successful call is kept in
+  `done_calls`; the same call again is `LOOP_DETECTED`), then approval, then runs the
+  tool; **a failed attempt also costs one step of the budget**; a retryable error is
+  retried while `attempts < MAX_ATTEMPTS`, otherwise `STEP_FAILED`. Its tests include
+  `test_transient_error_is_retried_then_succeeds` and
+  `test_permanent_error_fails_without_retry`.
+- **Lesson 5 notebook** (the lesson 4 machine ported to LangGraph): the graph is compiled
+  with `checkpointer=InMemorySaver()` (from `langgraph.checkpoint.memory`), every call
+  passes `{"configurable": {"thread_id": ...}}`, and two thread ids on the same graph
+  keep separate states. `interrupt()` and `Command(resume=...)` pause and resume.
+  Our graph in `orchestrator.py` is already LangGraph, so we use exactly this.
+- **Repo layout.** The sheet shows a *recommended* layout (`src/tools.py`,
+  `src/state.py`, `src/agent.py`). Ours keeps its folders: moving 30 files and 354 tests
+  in ten days risks breaking working code for no points. The README maps the sheet's
+  layout to ours (M7). The user asks the lecturer to confirm this, together with the
+  deadline day.
 
 ## 3. The approved proposal — do not break it
 
@@ -159,11 +182,20 @@ out on every attempt": after the last attempt the run stops with `input_error`,
 ## 4. Milestone 1 steps
 
 Branch names continue after the existing steps. Each step is one branch and one PR.
-Ran builds every step himself and reviews every PR before the merge.
+The other student reviews each PR before the merge.
 
-### M0 · `step7-colab-ready`
+Order: M0 → M1 → M2 → (M3 by Chen, and M4 by Ran, in parallel) → (M5 by Ran, and M6 by
+Chen, in parallel) → M7 → M8. Chen works on the macOS machine; everything must pass
+there too.
+
+### M0 · `step7-colab-ready` — owner Ran
 
 Goal: a clean Colab can install the project and run the tests.
+
+**Status 22.11:** built on `step7-colab-ready`, including the notebook below. 354 tests
+pass on Windows. Not yet checked: Linux, and "Run all" in a clean Colab (it needs repo
+access first). Cell 1 clones a `REF` variable; before the submission `REF` is the tag
+`milestone-1`, because a commit cannot contain its own id.
 
 - Fix the Linux test: allow `LC_CTYPE` and `LC_ALL` in the probe's `ALLOWED` set. Do
   not pass more variables from the parent.
@@ -175,21 +207,22 @@ Goal: a clean Colab can install the project and run the tests.
   with Python 3.12 and 3.13, and that tests must pass there.
 - `.env.example` with the key names and optional model names, all empty. Never open
   `.env`.
+- README: an "Open in Colab" badge with the notebook's GitHub path, and Linux/Colab commands next to every Windows command.
+
 - `colab/devsecops_milestone1.ipynb`, the only notebook in the repo. Cells, each with a
-  short Hebrew markdown cell above it:
+  short Hebrew markdown cell above it, in the style of the class notebooks:
   1. Clone the repo into `/content/devsecops-team` and `cd` into it. **Repo access:**
      stop and ask the user which way was chosen (see "Repo access" below) before
      writing this cell.
   2. `pip install -r requirements.txt`.
   3. `pytest -q`. Print the summary line.
   4. Demo with the scripted model, no key: `main.py review samples/login.py`, then show
-     the report and the trace files.
+     the report.
   5. Optional real model: read the key names from `google.colab.userdata` inside a
      `try`, copy only the ones that exist into `os.environ`, never print them, and run
      the demo with `--model llm`. If no key exists, print one line saying the real-model
      demo was skipped. The cell must not fail.
-- README: an "Open in Colab" badge with the notebook's GitHub path, and Linux/Colab
-  commands next to every Windows command.
+- After M6, add one cell that shows the two files in `docs/traces/`.
 
 **Repo access** (the user decides; ask before writing cell 1):
 
@@ -200,9 +233,9 @@ Goal: a clean Colab can install the project and run the tests.
   create his own token, so the README explains how.
 
 Done when: in a clean Colab, "Run all" finishes without an error and the tests pass.
-The user runs this check, not Claude Code.
+A student runs this check, not Claude Code.
 
-### M1 · `step8-tool-contracts` (25 points)
+### M1 · `step8-tool-contracts` — owner Ran (25 points)
 
 Goal: every approved tool has an explicit contract, and nothing runs before its input
 and permission are checked.
@@ -231,7 +264,7 @@ and permission are checked.
 - `docs/TOOLS.md`: a generated table of the seven contracts (a small script prints it
   from `tools/contracts.py`, so the doc cannot drift from the code).
 
-### M2 · `step9-failures-and-retries` (part of 25 points)
+### M2 · `step9-failures-and-retries` — owner Ran (part of 25 points)
 
 Goal: temporary errors are retried a limited number of times; permanent ones never.
 
@@ -244,9 +277,14 @@ Goal: temporary errors are retried a limited number of times; permanent ones nev
 - Every failed result: `{"ok": false, "error": "<code>", "message": "...",
   "retryable": <bool>, "attempts": <n>}`. The message never contains a key, a path
   outside the project, or a stack trace.
-- The registry retries only `retryable` errors, up to the tool's `max_attempts`
-  (default 3 attempts in total), with short waits (0.5 s, then 1 s). Tests replace the
-  wait function so they run instantly.
+- Follow lesson 4. A tool signals a failure with `ToolError(code, retryable)` (one class
+  in `tools/errors.py`); the registry turns it into the structured result above.
+  `MAX_ATTEMPTS = 3` in `config.py`. The registry retries only `retryable` errors while
+  `attempts < MAX_ATTEMPTS`, with short waits (0.5 s, then 1 s); a permanent error is
+  never retried. Tests replace the wait function so they run instantly.
+- **A failed attempt costs one step of the agent's budget**, as in lesson 4, so a flaky
+  tool cannot keep an agent running past its budget. If the budget ends during retries,
+  the agent stops with `budget_exhausted`.
 - Time limit: the subprocess tools pass `timeout_s` to the subprocess. The in-process
   tools are bounded by their input limits; the registry measures `latency_ms` and the
   contract states the limit. Write this honestly in the known limits.
@@ -257,7 +295,7 @@ Goal: temporary errors are retried a limited number of times; permanent ones nev
   `latency_ms`, and the final `decision` (`executed`, or `rejected` with the reason).
 - Update P3 and `docs/CHANGES.md` (section 3).
 
-### M3 · `step10-tool-tests` (part of 25 points)
+### M3 · `step10-tool-tests` — owner Chen, after M2 is merged (part of 25 points)
 
 Goal: at least three tests per tool, runnable with one command and no service.
 
@@ -269,18 +307,19 @@ Goal: at least three tests per tool, runnable with one command and no service.
      schema.
   2. `test_invalid_input` — a wrong type, a missing field, an extra field, and a bad
      value. The tool function is never called (spy on it).
-  3. `test_transient_failure_is_retried` — the first attempt fails with a temporary
-     error, the second succeeds; `attempts == 2`.
-  4. `test_transient_failure_exhausted` — every attempt fails; the result is
-     `retryable: true` with `attempts == max_attempts`.
-  5. `test_permanent_failure_not_retried` — exactly one attempt.
+  3. `test_transient_error_is_retried_then_succeeds` (lesson 4's name) — the first
+     attempt fails with a temporary error, the second succeeds; `attempts == 2`.
+  4. `test_transient_error_exhausts_attempts` — every attempt fails; the result is
+     `retryable: true` with `attempts == MAX_ATTEMPTS`.
+  5. `test_permanent_error_fails_without_retry` (lesson 4's name) — exactly one
+     attempt.
   6. `test_permission` — an agent outside `allowed_agents` gets `tool_not_allowed`, and
      the tool function is never called.
 - `apply` also: a write that fails leaves the original file byte for byte unchanged.
 - `pytest -q` from the repo root runs everything: no network, no key, no cost.
 - Keep the existing tests. Move or merge only with the user's yes.
 
-### M4 · `step11-state-and-runs` (20 points)
+### M4 · `step11-state-and-runs` — owner Ran (20 points)
 
 Goal: an explicit state schema, and two conversations that never mix.
 
@@ -290,19 +329,24 @@ Goal: an explicit state schema, and two conversations that never mix.
   characters), created by the application, never by the model. Every per-run path and
   record comes from it: the copies under `.work/<run_id>/`, the report file names, the
   trace file, and the `run_id` field in the report and in every trace line.
+- Follow lesson 5, section 13: compile the graph with
+  `checkpointer=InMemorySaver()` and pass `{"configurable": {"thread_id": run_id}}` to
+  every `invoke`. Check the import path against the pinned `langgraph` version before
+  writing code. `graph.get_state(config)` is how a test reads one conversation's state.
 - Agents start every run with an empty history. Nothing from one run reaches the
   model in another run.
 - Tests:
-  1. Two runs on two different samples in the same process, with the same agent and
-     model objects reused: no finding, card, copy, trace line or history message of
-     run A appears in run B, and the run ids differ.
+  1. As in lesson 5: two thread ids on **the same compiled graph**, two different
+     samples, the same agent and model objects reused. `get_state` of each thread holds
+     only its own findings, cards and trace; no copy, trace line or history message of
+     run A appears in run B; the run ids differ.
   2. Two runs on the same file: different run ids, separate copies and reports.
   3. The agent history is empty when a new run starts.
   4. `run_id` is not in any model-facing input schema, so the model cannot choose it.
 - `docs/ARCHITECTURE.md`: the state schema, and what is kept between runs (only the
   reports, for the human and `apply`; never sent back to a model).
 
-### M5 · `step12-context-comparison` (10 points)
+### M5 · `step12-context-comparison` — owner Ran (10 points)
 
 Goal: one question, asked twice: once with the full history, once with a reduced
 context. A small table with context size, correctness, and what is lost.
@@ -330,7 +374,7 @@ context. A small table with context size, correctness, and what is lost.
   do not fill in correctness. Running it three times per mode and reporting all three
   is better, if the free quota allows.
 
-### M6 · `step13-traces` (10 points)
+### M6 · `step13-traces` — owner Chen, after M4 is merged (10 points)
 
 Goal: two trace files that a reader can reproduce from the README.
 
@@ -340,6 +384,11 @@ Goal: two trace files that a reader can reproduce from the README.
   keys and no paths outside the project.
 - `--simulate-transient <tool>:<n>` (MOCK, documented as such in `--help` and the
   README): the named tool fails with a temporary error on its first `n` attempts.
+- Repeat detection, as in lesson 4: `agents/base_agent.py` keeps the signature (tool
+  name and arguments) of every successful call in `done_calls`. The same call again
+  ends the agent run with a new status, `loop_detected`. Add it to the statuses in
+  `AGENTS.md` and test it. The order of checks in every step is lesson 4's: budget,
+  repeat, permission and input, run.
 - Save in `docs/traces/`:
   1. `normal_run.json`: `review samples/login.py --model scripted`.
   2. `transient_failure_run.json`: the same command with
@@ -351,7 +400,7 @@ Goal: two trace files that a reader can reproduce from the README.
   ids. So the saved files cannot drift from the code.
 - README section "Reproduce the traces" with the two exact commands.
 
-### M7 · `step14-milestone1-docs` (10 points)
+### M7 · `step14-milestone1-docs` — owner Ran, Chen writes his rows (10 points)
 
 - `docs/milestone1.md`, in Hebrew, **at most two pages**, both names at the top:
   1. The execution decision and its result: the model only asks for a tool; the
@@ -371,26 +420,26 @@ Goal: two trace files that a reader can reproduce from the README.
      on a timeout (P3); `apply` writes atomically; the context switch; `pydantic` if
      used.
   6. Contribution table: who did what, per step and per file. It must be true: fill it
-     from `git log` and confirm every row with Ran. Ran built milestone 1. Chen's earlier
-     commits (PR #11: run function descriptions and an import fix) are listed as they
-     are, no more and no less.
+     from `git log` and confirm every row with both students. List what each one
+     really did, including Chen's earlier commits (PR #11) and his milestone 1 steps.
 - `docs/ai_usage.md`, both names at the top: a table with date, tool and model,
   purpose, key prompts, parts that were integrated, fixes and checks that were done.
   Draft rows from `git log`, then ask the user to confirm every row. Include the
   proposal and this plan. Never list a test that did not run.
 - `docs/CHANGES.md`: the lecturer's three recommendations and what was done about
   each, plus the changes in section 5 above.
-- README: both names; install and run on Windows, Linux and Colab; the Colab badge;
+- README: both names; install and run on Windows, macOS, Linux and Colab; the Colab badge;
   how to run the tests; the trace commands; a short map from the sheet's suggested
   layout to ours (`src/tools.py` → `tools/` and `tools/contracts.py`, `src/state.py` →
   `state.py`, `src/agent.py` → `agents/base_agent.py` and `orchestrator.py`).
 
-### M8 · `step15-submission-check`
+### M8 · `step15-submission-check` — owner Chen, with Ran
 
-Go through the sheet's checklist. Claude Code runs read-only checks and reports; Ran
-runs Colab, GitHub and git himself.
+Go through the sheet's checklist. Claude Code runs read-only checks and reports; the
+students run Colab, GitHub and git themselves.
 
 - [ ] The lecturer can open the repo (the M0 decision is done).
+- [ ] The lecturer confirmed the deadline day and that our folder layout is fine.
 - [ ] "Run all" in a clean Colab finishes and the tests pass. Run on the final commit.
 - [ ] `pytest -q` passes on Windows and on Linux.
 - [ ] No passwords, keys or personal data in the code, the samples, or the commit
@@ -503,14 +552,17 @@ behavior tests (the lecturer said a subprocess with a timeout is enough).
    an agent allowlist.
 5. **Never invent a result.** Say what you ran and what the output was. Label every
    number as a real-model run or a scripted run.
-6. **Keep it simple.** Ran must be able to explain every line alone in the final
+6. **Keep it simple.** Each student must explain every line alone in the final
    presentation. Prefer 30 clear lines over a clever abstraction. No new dependency
    without asking.
 7. **Runs everywhere.** Windows for development, Linux and Colab for grading, Python
    3.12 and 3.13.
 8. **If the code and this plan disagree, stop and ask.**
 9. **Teach while building.** Before a step, explain in Hebrew what changes and why.
-   After it, ask Ran three short questions and wait for the answers.
-10. **One builder.** Ran builds the whole project. Both names still appear on every
-    document, because the course requires it for a pair submission. Do not assign work
-    to anyone else, and keep the contribution table true.
+   After it, ask the step owner three short questions and wait for the answers.
+10. **Owners.** Chen owns M3, M6 and M8. Ran owns everything else. Both names appear
+    on every document. The contribution table must be true.
+11. **Follow the class code.** When the lesson notebooks show a pattern for something
+    (lesson 4: `ToolError`, `MAX_ATTEMPTS`, `done_calls`, test names; lesson 5:
+    `InMemorySaver`, `thread_id`), use the same names and the same order, so the grader
+    sees the course material in our code.
