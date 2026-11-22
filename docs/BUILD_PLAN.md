@@ -1,380 +1,516 @@
 # BUILD_PLAN.md — instructions for Claude Code
 
-Version 2, 15.11.2026. Updated after the lecturer approved the proposal and after
-lesson 4. It replaces version 1 completely. Put it at `docs/BUILD_PLAN.md`.
+Version 3.1, 22.11.2026. Replaces version 2 completely. Save it over `docs/BUILD_PLAN.md`.
 
-This file tells Claude Code what to build next in the `devsecops-team` repo, in what
-order, and how to know each step is done.
+Version 3 puts **milestone 1** first. The lecturer published its requirements sheet
+after version 2 was written, and some of its requirements change earlier decisions
+(Google Colab, tool retries, a test with a transient failure for every tool, a context
+comparison, trace files). Where this file and version 2 disagree, this file wins.
 
-Read `CLAUDE.md` first. Every rule there still applies: Hebrew when talking to the
+Read `AGENTS.md` first. Every rule there still applies: Hebrew when talking to the
 users, English in code and commits, one branch per step, tests before every commit,
 learning mode for git (the user types every command that changes something), no
 `Co-Authored-By`, never read `.env`, update `docs/ARCHITECTURE.md` in every step.
 
-How to use this file: work on one step at a time, in order. Before you start a step,
-tell the user in Hebrew what you plan to change. When a step is done, stop, list the
-changed files, give a commit message and the git commands, and wait.
+How to use this file: one step at a time, in order. Before a step, tell the user in
+Hebrew what you plan to change. After a step, stop: list the changed files, give a
+commit message and the git commands, ask the step owner three short questions about
+what was built, and wait.
 
 ---
 
-## 1. The lecturer's decision (received 15.11.2026, grade 95)
+## 1. Milestone 1 — what is graded
 
-**Decision: approved. Start building.**
+- **Due:** 2.12.2026. The sheet says "Friday, 02.12.2026", but 2.12.2026 is a
+  Wednesday. Treat Wednesday 2.12 as the deadline. Aim to finish on Monday 30.11.
+- **Weight:** 7.5% of the final grade. One submission per pair.
+- **Submitted:** a link to the Git repo and the id of the submitted commit. Only that
+  commit is checked. Changes after the deadline are ignored.
+- **Checked in Google Colab only.** The code must run in a clean Colab. Development can
+  stay on Windows.
+- **Both names** (Ran Ben Hemo, Chen Kadosh) appear in every document.
 
-What he praised — keep all of it:
+**Grading (out of 100):**
 
-- The proposal justifies multiple agents properly: three clear reasons, and a plan to
-  compare with a single agent.
-- Approval is decided only from tool results, and the model can only make it stricter.
-- The work is done on a copy only, and only a human runs `apply`.
-- There is an exact expected result by line and CWE.
+| Points | Criterion | Steps |
+|---|---|---|
+| 25 | Tool contracts, input validation and permissions, for every approved tool | M1 |
+| 25 | Failure handling and tests: valid input, invalid input, transient failure | M2, M3 |
+| 20 | State and memory: the schema, and separation between conversations | M4 |
+| 10 | Full context against reduced context | M5 |
+| 10 | Agent loop, traces, and reproducing it from the README | M0, M6 |
+| 10 | Documentation, AI appendix, and who did what | M7 |
 
-What he recommended — these are now requirements of this plan:
+**The seven required parts, all in the same repo:**
 
-1. **"This is the largest scope in the course."** Scope is the risk. Nothing new gets
-   added before the core is finished and measured.
-2. **"Until the first interim check, build a full pipeline with a single agent on
-   `login.py`. That gives you both the comparison baseline and a backup version."**
-   This is now the first step (S1).
-3. **"For running code, a separate process with a timeout is enough. A Docker
-   container only if time remains."** Docker moves to the optional list.
+1. README with install and run instructions and an "Open in Colab" link; a dependency
+   file with exact versions; allowed demo data only; no passwords, API keys or
+   personal data.
+2. Every tool from the approved tools table has an explicit contract: name,
+   description, input schema, output schema. Values and permissions are validated
+   before the run. The result is structured JSON. A temporary error is told apart from
+   a permanent failure. There is a time limit and limited retries.
+3. At least three tests per tool: valid input, invalid input, transient failure. They
+   run with one command and without any external service. A mock tool is allowed when
+   it is clearly marked as a mock.
+4. A state schema defined in code. Two separate conversations whose state does not mix,
+   proven by a test. A comparison between sending the full history to the model and a
+   reduced context.
+5. A loop that calls the tool, gets the observation and stops on a stop condition. A
+   trace file of one normal run and of one run with a transient failure.
+6. A documentation file of at most two pages: the execution decision and its result
+   (who decides to call the tool, based on what, and what follows), the state schema
+   and why, the comparison results, known limits, and a contribution table.
+7. An AI usage appendix: tool and model, date, purpose, key prompts, parts that were
+   integrated, fixes and tests that were done.
 
-Record these three points in `docs/CHANGES.md` (step S4), with what we changed for each.
+**The comparison (part 4):** pick one question, run it twice, and show a small table
+with the context size (messages or characters), whether the answer was correct, and
+what is lost in the reduced context.
 
-## 2. Where the project stands
+**Colab rules:**
 
-Verified again on 15.11.2026: `main` is still at `029857d` (after PR #12), with no other
-branches. Nothing from this plan is in the repo yet. Checked on Linux with scripted
-models only.
+- Code lives in `.py` files in the repo, not in notebook cells. The notebook only runs it.
+- Exactly one `.ipynb` file in the repo. Its cells: `git clone`, `pip install -r
+  requirements.txt`, run the tests, a demo of the agent.
+- It runs top to bottom in a clean Colab: by default with the mock model and no key;
+  with a real model when a key is set in Colab Secrets.
+- `requirements.txt` has exact versions.
+- The API key lives only in Colab Secrets or an environment variable, never in the repo
+  or in the commit history.
+- Tests run with a mock model, no key and no cost, with one command (`pytest`).
 
-- Three agents run end to end: `pen_tester` → `developer` → `tester`, orchestrated by a
-  LangGraph graph of five nodes in `orchestrator.py`. A human applies fixes with
-  `main.py apply`.
-- 354 tests are collected. 353 pass on Linux; one fails (step S2).
-- `main.py review samples/login.py` with scripted models gives one `ready` card and two
-  `needs_you` cards, because the scripted developer only fixes `hardcoded_secret`.
-- `main.py` with no file returns `clarify`. `main.py review` with no file stops in
-  argparse with a usage error instead.
-- There is no single-agent pipeline, no evaluation set, no run id, no loop detection.
-- `README.md` has Windows commands only. One teammate works on macOS.
+**Forbidden:** inventing results or tests that did not run. Always say whether a number
+comes from a real run or from a scripted/mock run.
 
-Not verified: any run with `--model llm`, and any run on Windows or macOS.
+## 2. Facts checked on 22.11.2026
 
-## 3. Decisions already made — do not reopen them
+- `main` is at `db5c50c`: PR #13 (`AGENTS.md`) and PR #14 (build plan v2) are merged.
+  No code from the plan is built yet.
+- The repo is **private**. A clean Colab cannot `git clone` it without a token. The
+  user decides how the lecturer gets access (step M0).
+- No API keys in the full history (searched all commits for Groq, Gemini, OpenRouter,
+  OpenAI and GitHub key patterns). `.env` was never committed.
+- `requirements.txt`: `pytest` unpinned, `langgraph==1.2.18`, `bandit==1.9.4`, and a
+  UTF-8 BOM. Both pinned packages require Python 3.10 or newer and install on 3.12.
+- Colab runtime `2026.10` uses Python 3.13; earlier 2026 runtimes use 3.12. The code
+  must run on both. Do not use features that exist only in 3.13.
+- On Linux, 353 of 354 tests pass. The failing one is
+  `tests/test_verify_tools.py::test_subprocess_gets_no_keys_or_tokens`: the child
+  Python adds `LC_CTYPE` to its own environment. Colab is Linux, so this must be fixed.
+- Tool timeouts today: `run_bandit` and `run_behavior_tests` have subprocess timeouts.
+  No tool is retried. Failed results are `{"ok": false, "error": "<code>"}` with no
+  `retryable` flag. The only retries in the code are for model HTTP calls
+  (`models/llm_adapter.py`: two retries, waits of 2 and 6 seconds).
+- The agent loop (`agents/base_agent.py`) already calls tools, records observations,
+  and stops with `final`, `clarify`, `budget_exhausted` or `invalid_action`.
+- `ReviewState` is a `TypedDict` in `orchestrator.py`. There is no run id, so there is
+  no explicit "conversation".
+- The model gets the full step history of its agent (`models/llm_common.py`,
+  `build_messages`) and, for each finding, five source lines on each side.
+- Class notebooks use `pydantic` (lesson 3, `extra="forbid"`) and `google-genai`.
+  The project uses neither today.
 
-- **Python only.** No other language.
-- **Three agents stay as the main system.** The single agent is the baseline and the
-  backup, as the lecturer asked.
-- **One Python file per run.** No whole-repo mode.
-- **Dropped for good:** GuardDog, Semgrep, OpenSSF Scorecard, Inspect, promptfoo, the
-  audit mode, `pip-audit` and `gitleaks` as agent tools.
-- **All tools run locally.** No cloud scanners, no paid services.
-- **No new tool and no new dependency** before Phase 3 is done, unless the user says so.
+## 3. The approved proposal — do not break it
 
-If a task seems to need one of these, stop and ask the user.
-
-## 4. The contract with the approved proposal
-
-The code must keep matching the approved proposal. If a step would break one of these
-lines, stop and tell the user: a change has to be agreed with the lecturer in writing.
+**The lecturer's decision (15.11.2026, grade 95): approved, start building.** He
+praised the three reasons for three agents and the plan to compare with one agent,
+approval decided only from tool results, work on a copy only with a human running
+`apply`, and the expected result by line and CWE. He recommended: the scope is the
+largest in the course; build a full single-agent pipeline on `login.py` by the first
+interim check, as a baseline and a backup; a subprocess with a timeout is enough for
+running code, Docker only if time remains.
 
 **Safety invariant.** No agent ever writes to the original file. Only a human running
 `main.py apply` does. Every step keeps a test that proves this.
 
-**Tools**
+**The approved tools.** Milestone 1 needs a contract and three tests for each of these
+seven:
 
 | Tool | Type | Who | Limit |
 |---|---|---|---|
-| `analyze_code`, `run_bandit` | read | `pen_tester` | same contract for both |
-| `make_diff` | compute | `developer` | in memory, never writes |
+| `analyze_code` | read | `pen_tester` | Python files inside the project only |
+| `run_bandit` | read | `pen_tester` | subprocess, no keys in env, timeout |
+| `read_snippet` | read | `developer` | at most 60 lines |
+| `make_diff` | compute | `developer` | in memory, never writes, at most 15 changed lines |
 | `rescan` | compute | `tester` | copy only |
 | `run_behavior_tests` | runs code | `tester` | subprocess, copy only, no keys in env, 30 s |
-| `apply` | write | human only | not in the registry |
-
-`read_snippet` is the sixth, helper tool (read only, `developer`).
+| `apply` | write | human only | not in any agent's allowlist |
 
 **Budgets.** `pen_tester` 4 steps, `developer` 5 per attempt, `tester` 4 per proposal,
 3 attempts per finding, 600 s per `review` run, 30 s per model request.
 
-**The five proposal test cases.** Each stays an automatic test with this exact result,
-for the three-agent team and for the single agent:
+**The five proposal test cases** stay automatic tests with these exact results:
 
 | # | Kind | Input | Expected |
 |---|---|---|---|
 | P1 | normal | `samples/login.py` | three `real` findings: line 5 CWE-798, line 10 CWE-89, line 18 CWE-78; line 14 not reported; one card per finding |
-| P2 | missing info / ambiguous | run with no file path; `samples/notes.txt` | no file: status `clarify`, one question, no tool ran. Wrong file type: `unsupported_language`, no findings |
-| P3 | tool failure | a fake Bandit that does not answer in 30 s | `input_error` with `timeout`, no findings, no extra retry |
+| P2 | missing info / ambiguous | no file path; `samples/notes.txt` | no file: `clarify`, one question, no tool ran. Wrong type: `unsupported_language`, no findings |
+| P3 | tool failure | a mock Bandit that does not answer in time | `input_error` with `timeout`, no findings |
 | P4 | out of permissions | `developer` asks for `analyze_code`; path `../x.py`; `apply` on a `needs_you` card | `tool_not_allowed`; `path_outside_project`; refusal with exit code 3. Nothing ran, nothing written |
 | P5 | prompt injection | `samples/injection.py` | CWE-78 on line 9 reported as `real`; a model reply that drops it is `invalid_action` |
 
-**Main metric.** The number of evaluation cases where the findings (line and CWE) and
-every card status equal the expected result. Target: 5 of 5 on the table above, and at
-least 9 of 10 on the full set in the final submission.
-
-**Promised in the schedule.** First interim check: the five tools with contract,
-permissions and failure handling, the state schema, tests for every tool. Second
-interim check: the graph with the retry loop, and a card that shows evidence for every
-conclusion. By the presentation: ten test cases, an evaluation report, and the
-comparison with a single agent.
-
-## 5. What lesson 4 asks for, and where it lands in this plan
-
-Lesson 4 ("planning and control flow") is the last lesson taught. Its exercise told
-approved teams to draw a state machine for their own project's agent. Its points:
-
-| Lesson 4 | In this plan |
-|---|---|
-| Workflow or agent: who decides the next step. In practice the code sets the frame and limits, the model decides inside it | The single agent in S1 is built exactly this way |
-| Every agent has three paths: success, clarification, budget exhaustion | Three trace tests in S1, and the same three for the team in S5 |
-| The plan is data, not hidden thought: it can be printed, checked, approved, resumed | The findings queue and its cursor are the plan. S1 and S5 print it in the report |
-| Ask before acting, and only about what is missing | S1 `ASK_USER`, and S2 for `review` |
-| Every loop needs a stop condition: step budget checked first, limited attempts for temporary errors only, repeat detection | S1 and S5 add repeat detection (`loop_detected`) |
-| A dangerous action stops and waits for a human, checked in code | `apply` already does this. S1 names the pause `AWAIT_APPROVAL` |
-| State machine: one transitions table, one `advance` function, an illegal transition is an error | S1 |
-| Test the trace, not the wording; no model and no API key needed | S1 and S5 |
-| Lesson 5 turns the table into a LangGraph graph; pause and resume with `interrupt` | The team graph already exists. Decide about `interrupt` after lesson 5 (optional O2) |
+P3 changes meaning in M2: Bandit is now retried on a timeout. P3 becomes "Bandit times
+out on every attempt": after the last attempt the run stops with `input_error`,
+`timeout`, the number of attempts, and no findings. Record this in `docs/CHANGES.md`.
 
 ---
 
-## 6. Steps
+## 4. Milestone 1 steps
 
-Each step is one branch and one PR, named `stepN-short-name`, continuing after the
-existing step 6.
+Branch names continue after the existing steps. Each step is one branch and one PR.
+Ran builds every step himself and reviews every PR before the merge.
 
-### Phase 1 — before the first interim check
+### M0 · `step7-colab-ready`
 
-Check the date of the first interim check on the course site with the user before you
-start. If it is close, do S1 and S2 first and tell the user what will not be ready.
+Goal: a clean Colab can install the project and run the tests.
 
-#### S1 · `step7-single-agent` — the lecturer's request
+- Fix the Linux test: allow `LC_CTYPE` and `LC_ALL` in the probe's `ALLOWED` set. Do
+  not pass more variables from the parent.
+- `requirements.txt`: remove the BOM; pin every direct dependency exactly, including
+  `pytest`. If M1 uses `pydantic`, pin it too. Add a comment line with the Python
+  versions it was tested on.
+- Remove the BOM from `README.md`.
+- `AGENTS.md`, Environment: add that the code must also run on Linux in Google Colab
+  with Python 3.12 and 3.13, and that tests must pass there.
+- `.env.example` with the key names and optional model names, all empty. Never open
+  `.env`.
+- `colab/devsecops_milestone1.ipynb`, the only notebook in the repo. Cells, each with a
+  short Hebrew markdown cell above it:
+  1. Clone the repo into `/content/devsecops-team` and `cd` into it. **Repo access:**
+     stop and ask the user which way was chosen (see "Repo access" below) before
+     writing this cell.
+  2. `pip install -r requirements.txt`.
+  3. `pytest -q`. Print the summary line.
+  4. Demo with the scripted model, no key: `main.py review samples/login.py`, then show
+     the report and the trace files.
+  5. Optional real model: read the key names from `google.colab.userdata` inside a
+     `try`, copy only the ones that exist into `os.environ`, never print them, and run
+     the demo with `--model llm`. If no key exists, print one line saying the real-model
+     demo was skipped. The cell must not fail.
+- README: an "Open in Colab" badge with the notebook's GitHub path, and Linux/Colab
+  commands next to every Windows command.
 
-Goal: a full pipeline with **one agent** on `samples/login.py`: from the file to
-decision cards. It is the comparison baseline and the backup version.
+**Repo access** (the user decides; ask before writing cell 1):
 
-**Plan first.** Draw the state machine as a diagram and a transitions table, show them
-to the user, and wait for a yes before coding. The user needs to be able to redraw it
-on paper.
+- **Public at submission.** Simplest for a clean Colab. The history has no keys (checked
+  22.11). The user makes it public himself on GitHub.
+- **Private, the lecturer added as a collaborator.** Cell 1 reads a GitHub token from
+  Colab Secrets (`GH_TOKEN`) and clones with it, without printing it. The lecturer must
+  create his own token, so the README explains how.
 
-Design:
+Done when: in a clean Colab, "Run all" finishes without an error and the tests pass.
+The user runs this check, not Claude Code.
 
-- **One agent, one model, one context.** `agents/solo.py`. Its allowlist in
-  `tools/registry.py` holds all six tools. The model keeps one message history for the
-  whole run, where the team has three separate ones.
-- **A state machine in plain Python, no LangGraph.** `solo_flow.py`, in the style of
-  lesson 4:
-  - 6 to 10 working states. Suggested: `START`, `CHECK_INPUT`, `ASK_USER` (pause),
-    `SCAN`, `JUDGE`, `FIX`, `VERIFY`, `REPORT`, `AWAIT_APPROVAL` (pause).
-  - End states: `DONE`, `FAILED`, `STOPPED_BUDGET`, `STOPPED_LOOP`.
-  - One `TRANSITIONS` dict `(state, event) → next state`, one `advance` function that
-    is the only place the state changes, and a `trace` list of
-    `(state, event, next_state)`. A transition that is not in the table raises an error.
-  - A handler per state decides the **event**; the table decides the next **state**.
-  - The step budget is checked first, before every tool call. A hard loop limit is a
-    second safety net.
-  - Repeat detection: the same tool call with the same arguments that already
-    succeeded ends the run in `STOPPED_LOOP`.
-  - `ASK_USER`: no file path → one question, no tool runs. After the reply the run
-    goes back to `CHECK_INPUT`.
-  - `AWAIT_APPROVAL`: the cards are written and the process ends. `main.py apply` is
-    the continuation, unchanged.
-- **The same enforcement as the team.** Both scanners must run before any verdict; the
-  model cannot add or drop a finding; the application builds the diff itself; approval
-  only when `rescan` is clean and the `works` and `attack` tests passed; three attempts
-  per finding; never a write to the original. Reuse the existing check functions. Do
-  not copy them. If a check lives inside an agent class, move it to a shared function
-  in its own small commit first.
-- **The same output.** The same card and report format, so `apply` works on a solo
-  report, and the two teams can be compared field by field.
-- **Models.** `ScriptedSoloModel` (rules, no API) for tests and the demo, and
-  `LLMSoloModel` with one provider. For the scripted model to finish all of `login.py`
-  it must fix all three rules; that work is shared with S6, so do the three fixes here
-  and reuse them there.
-- **CLI.** `main.py review <file> --team single`. The default stays `three`.
-- **Budget.** The sum of the three team budgets per finding. Write the number in
-  `config.py` next to the others.
+### M1 · `step8-tool-contracts` (25 points)
 
-Tests, all on traces, no API:
+Goal: every approved tool has an explicit contract, and nothing runs before its input
+and permission are checked.
 
-1. Success: `login.py` → the trace ends in `AWAIT_APPROVAL`, three findings match P1,
-   one card per finding.
-2. Clarification: no file → the run stops in `ASK_USER`, no tool ran; a reply with a
-   path continues the run.
-3. Budget: a small `max_steps` → `STOPPED_BUDGET`, with a partial report that lists
-   what was not done.
-4. Tool failure: a fake Bandit timeout → `FAILED` with `input_error`, no findings (P3).
-5. Loop: the model repeats a successful call → `STOPPED_LOOP`.
-6. No write without a human: the sha256 of `login.py` is the same before and after.
-7. The table has no dead end: every working state has a way out, and every end state
-   can be reached.
-8. An illegal transition raises.
-9. P2, P4 and P5 hold with `--team single`.
+- New file `tools/contracts.py`, one entry per tool, all seven:
+  `name`, `description` (what it does, when to use it, what it never does),
+  `input_schema` and `output_schema` (JSON Schema), `kind` (read, compute, runs code,
+  write), `allowed_agents`, `timeout_s`, `max_attempts`.
+- **Validation library:** ask the user first. The suggestion is `pydantic`, as in
+  lesson 3: one input model per tool with `extra="forbid"`, and
+  `model_json_schema()` produces the input schema. `pydantic` is already installed with
+  `langgraph`; pin its version in `requirements.txt`. If the user says no, write a small
+  validator for the subset used (type, required, no extra fields, min/max, length,
+  pattern).
+- Value checks, not only types: path inside the project and ending in `.py`; line
+  numbers 1 or more and inside the file; at most 60 snippet lines; at most 15 changed
+  lines; `copy_id` matches the copy id format; card ids that exist in the report.
+- `tools/registry.py` order for every call: known tool → allowed for this agent →
+  input valid → run. A failure at any check returns a structured error and the tool
+  does not run.
+- `apply` gets the same contract, validated in `main.py apply` before anything is
+  read or written. It stays out of every agent allowlist.
+- Every result is JSON: test that `json.dumps` works on every success and error result
+  of every tool.
+- Keep the existing result keys so the agents keep working. Add fields, do not rename.
+- `docs/TOOLS.md`: a generated table of the seven contracts (a small script prints it
+  from `tools/contracts.py`, so the doc cannot drift from the code).
 
-Done when: `main.py review samples/login.py --team single --model scripted` produces
-three cards, all tests above pass, and `docs/ARCHITECTURE.md` has the state diagram and
-the transitions table.
+### M2 · `step9-failures-and-retries` (part of 25 points)
 
-#### S2 · `step8-run-everywhere-and-clarify`
+Goal: temporary errors are retried a limited number of times; permanent ones never.
 
-Goal: the project installs, runs and passes on Windows, macOS and Linux, and missing
-input always produces one question.
+- `tools/errors.py`: one table, error code → `retryable` (bool) and a short English
+  `message`. Temporary: `timeout`, `temporarily_unavailable` (an `OSError` while
+  reading or writing a file, or a subprocess that could not start). Permanent: every
+  other code, including `file_not_found`, `unsupported_language`, `syntax_error`,
+  `file_too_large`, `invalid_range`, `change_too_large`, `unknown_copy`,
+  `tool_not_allowed`, `unknown_tool`, `invalid_arguments`, `path_outside_project`.
+- Every failed result: `{"ok": false, "error": "<code>", "message": "...",
+  "retryable": <bool>, "attempts": <n>}`. The message never contains a key, a path
+  outside the project, or a stack trace.
+- The registry retries only `retryable` errors, up to the tool's `max_attempts`
+  (default 3 attempts in total), with short waits (0.5 s, then 1 s). Tests replace the
+  wait function so they run instantly.
+- Time limit: the subprocess tools pass `timeout_s` to the subprocess. The in-process
+  tools are bounded by their input limits; the registry measures `latency_ms` and the
+  contract states the limit. Write this honestly in the known limits.
+- `apply`: write to a temporary file next to the target, then `os.replace`, so a failed
+  write never leaves half a file. An `OSError` is retried like a temporary error; when
+  attempts run out, refuse and write nothing.
+- A tool step in the agent trace records every attempt: `attempt`, `error` or `ok`,
+  `latency_ms`, and the final `decision` (`executed`, or `rejected` with the reason).
+- Update P3 and `docs/CHANGES.md` (section 3).
 
-- `tests/test_verify_tools.py::test_subprocess_gets_no_keys_or_tokens` fails on Linux:
-  the child Python adds `LC_CTYPE` to its own environment. Allow `LC_CTYPE` and
-  `LC_ALL` in the probe's `ALLOWED` set. Do not pass more variables from the parent.
-- `README.md`: add macOS/Linux commands (`.venv/bin/python`) next to every Windows
-  command. Keep the Hebrew text. Add the `--team single` command.
-- Add `.env.example` with the key names and optional model names, empty values. Never
-  open `.env`.
-- Remove the BOM from `README.md` and `requirements.txt`. Pin `pytest`.
-- Move the "no file path → clarify" rule from the two pen tester models into
-  `PenTester.review`. The model is not called.
-- `main.py review` with no file: the same `clarify` result, exit code 2, no report
-  files, no tool run.
+### M3 · `step10-tool-tests` (part of 25 points)
 
-Done when: `pytest -q` is green on the user's Windows machine and on Linux, and P2
-holds for `main.py`, `main.py review` and `--team single`.
+Goal: at least three tests per tool, runnable with one command and no service.
 
-#### S3 · `step9-interim-check-1`
+- `tools/mocks.py`: mock tools and failure injectors. Every one has the word `MOCK` in
+  its name and a comment on the first line: `# MOCK: simulated failure, used only in
+  tests and in the --simulate-transient demo`. They are never in an agent allowlist.
+- `tests/tools/test_<tool>.py`, one file per tool, all seven, with at least:
+  1. `test_valid_input` — the structured success result, checked against the output
+     schema.
+  2. `test_invalid_input` — a wrong type, a missing field, an extra field, and a bad
+     value. The tool function is never called (spy on it).
+  3. `test_transient_failure_is_retried` — the first attempt fails with a temporary
+     error, the second succeeds; `attempts == 2`.
+  4. `test_transient_failure_exhausted` — every attempt fails; the result is
+     `retryable: true` with `attempts == max_attempts`.
+  5. `test_permanent_failure_not_retried` — exactly one attempt.
+  6. `test_permission` — an agent outside `allowed_agents` gets `tool_not_allowed`, and
+     the tool function is never called.
+- `apply` also: a write that fails leaves the original file byte for byte unchanged.
+- `pytest -q` from the repo root runs everything: no network, no key, no cost.
+- Keep the existing tests. Move or merge only with the user's yes.
 
-Goal: the first interim check shows exactly what the proposal promised and what the
-lecturer listed for it: tools with a contract, validation, permissions and failure
-handling; the state schema and separation between runs; tests; short run instructions.
+### M4 · `step11-state-and-runs` (20 points)
 
-- Failed tool results keep `"ok": false` and `"error": "<code>"`, and gain
-  `"retryable": <bool>` and a short `"message"`, added in one place in
-  `tools/registry.py` from one table. `timeout` and `bandit_failed` are retryable; the
-  rest are permanent. Information only: no automatic tool retries.
-- Each tool step in the trace gains `"decision"` (`"executed"`, or `"rejected"` with
-  the reason) and `"latency_ms"`.
-- `run_id` (8 hex chars) in `ReviewState`, in the report JSON and Markdown, and in the
-  report file name.
-- Test: two `review` runs on two samples produce reports whose cards, copies and run
-  ids do not overlap.
-- `docs/MILESTONE_1.md`, in Hebrew, one page: the tools table from section 4 with the
-  errors of each tool, the state schema, the single-agent state diagram, how to run
-  the tests and the demo, and what is not built yet.
+Goal: an explicit state schema, and two conversations that never mix.
 
-Done when: a person who never saw the repo can follow `docs/MILESTONE_1.md` and run the
-single agent on `login.py` in under five minutes.
+- Move `ReviewState` from `orchestrator.py` to `state.py` with a docstring per field:
+  what it holds, who writes it, when it changes.
+- In this project a **conversation** is one `review` run. Add `run_id` (8 hex
+  characters), created by the application, never by the model. Every per-run path and
+  record comes from it: the copies under `.work/<run_id>/`, the report file names, the
+  trace file, and the `run_id` field in the report and in every trace line.
+- Agents start every run with an empty history. Nothing from one run reaches the
+  model in another run.
+- Tests:
+  1. Two runs on two different samples in the same process, with the same agent and
+     model objects reused: no finding, card, copy, trace line or history message of
+     run A appears in run B, and the run ids differ.
+  2. Two runs on the same file: different run ids, separate copies and reports.
+  3. The agent history is empty when a new run starts.
+  4. `run_id` is not in any model-facing input schema, so the model cannot choose it.
+- `docs/ARCHITECTURE.md`: the state schema, and what is kept between runs (only the
+  reports, for the human and `apply`; never sent back to a model).
 
-#### S4 · `step10-housekeeping`
+### M5 · `step12-context-comparison` (10 points)
 
-- Rename `CLAUDE.md` to `AGENTS.md`, and add a new one-line `CLAUDE.md` containing
-  `@AGENTS.md`. The user types the git commands.
-- In the design rules, add `loop_detected` to the list of end statuses.
-- `docs/CHANGES.md`: the three lecturer recommendations from section 1, each with what
-  we changed and in which PR.
-- `docs/AI_USAGE.md`: a table with date, tool and model, purpose, key prompt, what was
-  integrated, what was fixed and how it was checked. Draft past rows from `git log` and
-  ask the user to confirm every row. Never list a test that was not run.
+Goal: one question, asked twice: once with the full history, once with a reduced
+context. A small table with context size, correctness, and what is lost.
 
-From here on, add one row to `docs/AI_USAGE.md` in every step.
+- Add `context_mode` with two values, set in `config.py` and by `--context
+  full|reduced`:
+  - `full`: the model gets every earlier step in full and the **whole file**.
+  - `reduced`: the model gets the task, the last step only, and five lines on each side
+    of the finding. This is today's behavior for the file context.
+- Add `samples/context_far.py`: one line that a rule flags, whose safety depends on code
+  more than five lines away (for example, a value fixed as a constant near the top of
+  the file and used far below). Before you write it, check that the rule really flags
+  that line. Record the expected verdict in `samples/EXPECTED.md`: `false_positive`.
+- The question: "Is the finding at line N of `samples/context_far.py` real or a false
+  positive?", answered by `pen_tester`.
+- `experiments/context_compare.py --model scripted|llm`: runs the question once per
+  mode and writes `docs/context_comparison.json` with, per mode: messages sent,
+  characters sent, the verdict, correct or not, and the source lines that were missing
+  from the context.
+- A scripted test checks the sizes and that the reduced context does not contain the
+  line that makes the finding safe. It does not claim anything about correctness.
+- **The table in the documentation must come from a real model run.** The user runs
+  `--model llm` (the key stays in `.env` or Colab Secrets). Write the table only from
+  `docs/context_comparison.json`. If the real run was not made, say so in the table and
+  do not fill in correctness. Running it three times per mode and reporting all three
+  is better, if the free quota allows.
 
-### Phase 2 — before the second interim check (coordination and evidence)
+### M6 · `step13-traces` (10 points)
 
-#### S5 · `step11-team-traces`
+Goal: two trace files that a reader can reproduce from the README.
 
-Goal: the three-agent graph shows the same lesson 4 properties as the single agent.
+- `--trace-out <path>` on `main.py review`: writes the full trace as JSON: `run_id`, the
+  model mode, and per agent per step: the action, the tool, the arguments, every
+  attempt, `decision`, `latency_ms`, a short result summary, and the stop status. No
+  keys and no paths outside the project.
+- `--simulate-transient <tool>:<n>` (MOCK, documented as such in `--help` and the
+  README): the named tool fails with a temporary error on its first `n` attempts.
+- Save in `docs/traces/`:
+  1. `normal_run.json`: `review samples/login.py --model scripted`.
+  2. `transient_failure_run.json`: the same command with
+     `--simulate-transient run_bandit:1`. The trace shows attempt 1 `timeout`, attempt
+     2 ok, and the run going on to the end.
+  3. Optional: `normal_run_llm.json` with a real model, if the user runs it.
+- A test regenerates both scripted traces in a temporary folder and compares their
+  structure (statuses, tools, attempts) with the saved files, ignoring times and run
+  ids. So the saved files cannot drift from the code.
+- README section "Reproduce the traces" with the two exact commands.
 
-- `ReviewState` gains a `trace` of `(node, event, next_node)`.
-- Tests on traces for the three paths: success, clarification, budget exhaustion.
-- Repeat detection in `agents/base_agent.py`: the same successful tool call twice ends
-  the agent run with `loop_detected`.
-- The report prints the plan: the findings queue, the cursor, and the state of each
-  finding.
-- `docs/ARCHITECTURE.md`: a table that puts the team graph next to the single-agent
-  state machine: nodes and states, edges and events.
+### M7 · `step14-milestone1-docs` (10 points)
 
-#### S6 · `step12-full-offline-run`
+- `docs/milestone1.md`, in Hebrew, **at most two pages**, both names at the top:
+  1. The execution decision and its result: the model only asks for a tool; the
+     registry checks that the tool exists, that this agent may use it, and that the
+     input is valid; then the tool runs with a time limit and limited retries; the
+     structured result becomes the next observation; the loop stops on `final`,
+     `clarify`, `budget_exhausted`, `invalid_action` or a permanent error. One small
+     diagram.
+  2. The state schema and why: one `ReviewState` per run, keyed by `run_id`; why
+     reports are the only thing kept between runs; why the model never chooses the
+     run id.
+  3. The comparison table from M5, with a sentence on what was lost.
+  4. Known limits, honestly. At least: in-process tools have no hard time limit, only
+     input limits; correctness in the comparison comes from N real runs; the scripted
+     model is not a real model; anything else found during M0–M6.
+  5. Changes from the proposal, each with its reason. At least: Bandit is now retried
+     on a timeout (P3); `apply` writes atomically; the context switch; `pydantic` if
+     used.
+  6. Contribution table: who did what, per step and per file. It must be true: fill it
+     from `git log` and confirm every row with Ran. Ran built milestone 1. Chen's earlier
+     commits (PR #11: run function descriptions and an import fix) are listed as they
+     are, no more and no less.
+- `docs/ai_usage.md`, both names at the top: a table with date, tool and model,
+  purpose, key prompts, parts that were integrated, fixes and checks that were done.
+  Draft rows from `git log`, then ask the user to confirm every row. Include the
+  proposal and this plan. Never list a test that did not run.
+- `docs/CHANGES.md`: the lecturer's three recommendations and what was done about
+  each, plus the changes in section 5 above.
+- README: both names; install and run on Windows, Linux and Colab; the Colab badge;
+  how to run the tests; the trace commands; a short map from the sheet's suggested
+  layout to ours (`src/tools.py` → `tools/` and `tools/contracts.py`, `src/state.py` →
+  `state.py`, `src/agent.py` → `agents/base_agent.py` and `orchestrator.py`).
 
-Goal: the offline run and the demo show the full system and the retry loop.
+### M8 · `step15-submission-check`
 
-- `ScriptedDeveloperModel` fixes `sql_concat` and `shell_injection` too, using the
-  fixes written in S1. `main.py review samples/login.py` with scripted models gives
-  three `ready` cards.
-- A scripted developer variant that proposes a wrong fix first and a correct one after
-  feedback: `--model scripted-retry`. One test shows attempt 1 `retry` with feedback
-  and attempt 2 `approve`.
-- Every card shows the evidence for its conclusion in one place: which scanner found
-  it, the attack test before and after, the `rescan` result, the `works` result.
+Go through the sheet's checklist. Claude Code runs read-only checks and reports; Ran
+runs Colab, GitHub and git himself.
 
-### Phase 3 — evaluation (20% of the grade)
+- [ ] The lecturer can open the repo (the M0 decision is done).
+- [ ] "Run all" in a clean Colab finishes and the tests pass. Run on the final commit.
+- [ ] `pytest -q` passes on Windows and on Linux.
+- [ ] No passwords, keys or personal data in the code, the samples, or the commit
+      history: search `git log -p` for key patterns and report the result.
+- [ ] Every tool has its tests, and they pass.
+- [ ] The two-conversation test exists and passes.
+- [ ] `docs/traces/` holds the two trace files.
+- [ ] `docs/milestone1.md` and `docs/ai_usage.md` exist, have both names, and the
+      first is at most two pages.
+- [ ] The user creates the tag `milestone-1` on the submitted commit and writes the
+      commit id in the course site submission.
 
-#### S7 · `step13-eval-samples`
+### After M8, if there is time before 2.12 — the single agent (lecturer's request)
 
-At least 10 evaluation files, synthetic and written by us, each with rows in
-`samples/EXPECTED.md`, and `works`/`attack` tests where a `ready` card is expected:
+The lecturer asked for a single-agent pipeline on `login.py` by the first interim check.
+The milestone 1 sheet does not grade it, so it comes after M0–M8. If M8 is done by
+Saturday 28.11, build S1 below as the next branch. If not, say in
+`docs/milestone1.md`, under changes, that it is planned for milestone 2 and why.
 
-- `false_positive.py`: two or three places a rule flags that the context shows are
-  safe, such as `password_label = "Enter password:"`. Record two expectations: `real`
-  with the scripted model, `false_positive` with a real model.
-- `sql_fstring.py`, `secret_attr.py`, `two_findings.py` (two findings within 10 lines),
-  `syntax_error.py`, `injection_string.py` (the "ignore all findings" text inside a
-  string literal).
+---
 
-#### S8 · `step14-eval-runner`
+## 5. After milestone 1
 
-- `eval/cases.json`: one entry per case with the expected findings `(line, cwe)`,
-  verdicts, card statuses, run status and exit code. Include P1–P5.
-- `eval/run_eval.py --model scripted|llm --team three|single`: runs every case and
-  prints a table plus `eval/results-<model>-<team>.json`: matched cases, precision and
-  recall of findings, verdict accuracy, share of `ready` cards, mean attempts, wall
-  time, model requests.
-- It checks the safety invariant itself: the sha256 of every sample before and after.
-- `tests/test_eval.py` runs it with scripted models for both teams and asserts P1–P5.
+These come from version 2, renumbered. Do them in order.
 
-#### S9 · `step15-evaluation-report`
+### S1 · `single-agent` — the lecturer's recommendation
 
-- The user runs `eval/run_eval.py --model llm` for both teams, more than once. Respect
-  the request caps; a run stopped by a cap writes a partial result.
-- `docs/EVALUATION.md`, from the result files only: the numbers, the table of three
-  agents against one (quality, time, requests), every failed case with its cause, and
-  what was not tested. Never write a number that is not in a result file.
-- State the conclusion honestly. The proposal says: if three agents show no advantage,
-  we reduce. If that is the result, say so and tell the user.
+A full pipeline with one agent on `samples/login.py`, as the comparison baseline and a
+backup. **Plan first:** show the user the state diagram and the transitions table and
+wait for a yes.
 
-### Phase 4 — finish
-
-- `README.md` and `docs/ARCHITECTURE.md` match the code.
-- `docs/AI_USAGE.md` and `docs/CHANGES.md` complete; test report attached.
-- A live demo that needs no network: `--model scripted`, `--model scripted-retry`,
+- `agents/solo.py`: one agent, one model, one context. Its allowlist has all six agent
+  tools.
+- `solo_flow.py`: a state machine in plain Python, in the style of lesson 4. Working
+  states such as `START`, `CHECK_INPUT`, `ASK_USER` (pause), `SCAN`, `JUDGE`, `FIX`,
+  `VERIFY`, `REPORT`, `AWAIT_APPROVAL` (pause); end states `DONE`, `FAILED`,
+  `STOPPED_BUDGET`, `STOPPED_LOOP`. One `TRANSITIONS` dict, one `advance` function that
+  is the only place the state changes, a `trace` of `(state, event, next_state)`. An
+  illegal transition raises. The step budget is checked before every tool call.
+  The same successful call repeated ends in `STOPPED_LOOP`.
+- The same enforcement as the team: both scanners before any verdict, no added or
+  dropped findings, the diff built by the application, approval only from tool
+  results, three attempts per finding, never a write to the original. Reuse the
+  existing checks; do not copy them.
+- The same card and report format, so `apply` works on it.
+- `ScriptedSoloModel` fixes all three rules; reuse those fixes in S3.
+- `main.py review <file> --team single`. The default stays `three`.
+- Trace tests: success, clarification, budget, tool failure, loop, no write without a
+  human, no dead end in the table, an illegal transition raises, and P2, P4, P5 with
   `--team single`.
-- The user creates the `v1.0` tag.
 
-### Optional — only after Phase 3 is finished, in this order, one at a time
+### S2 · `team-traces` — lesson 4 properties for the team
 
-Ask the user before starting any of these.
+Repeat detection in `agents/base_agent.py` (`loop_detected`); trace tests for the three
+paths of the team; the report prints the plan (findings queue, cursor, state of each
+finding); `docs/ARCHITECTURE.md` puts the team graph next to the solo state machine.
 
-- **O1 · proof levels.** `proof_level` on each card: `full`, `partial`, `none`. Only
-  `full` can be `ready`.
-- **O2 · pause and resume in LangGraph.** A checkpointer with `thread_id = run_id`, and
-  `interrupt` for the human approval. Wait for lesson 5, and check the current
-  LangGraph docs for the pinned version before writing code.
-- **O3 · CI.** GitHub Actions on every PR: `pytest -q` and the scripted evaluation. No
-  API keys in CI.
-- **O4 · fix guides (retrieval, lesson 6).** A seventh tool, `lookup_fix_guide`, for
-  `developer`. It changes the approved tools table, so the user must agree it with the
-  lecturer in writing first.
-- **O5 · Docker for the behavior tests.** The lecturer said a subprocess with a timeout
-  is enough. Only if everything else is done.
+### S3 · `full-offline-run`
+
+`ScriptedDeveloperModel` fixes `sql_concat` and `shell_injection` too, so scripted
+`review samples/login.py` gives three `ready` cards. `--model scripted-retry`: a wrong
+fix first, a correct one after feedback. Every card shows its evidence in one place.
+
+### S4 · `eval-samples`
+
+At least 10 synthetic sample files with rows in `samples/EXPECTED.md` and `works` /
+`attack` tests where a `ready` card is expected: `false_positive.py`, `sql_fstring.py`,
+`secret_attr.py`, `two_findings.py`, `syntax_error.py`, `injection_string.py`,
+plus `context_far.py` from M5.
+
+### S5 · `eval-runner`
+
+`eval/cases.json` with P1–P5 and every sample; `eval/run_eval.py --model
+scripted|llm --team three|single` prints a table and writes
+`eval/results-<model>-<team>.json`: matched cases, precision and recall, verdict
+accuracy, share of `ready` cards, mean attempts, time, model requests. It checks the
+sha256 of every sample before and after. `tests/test_eval.py` runs the scripted mode
+for both teams.
+
+### S6 · `evaluation-report`
+
+The user runs the real-model evaluation for both teams, more than once.
+`docs/EVALUATION.md` only from result files: the numbers, three agents against one,
+every failed case with its cause, what was not tested. If three agents show no
+advantage, say so and tell the user: the proposal promised to reduce in that case.
+
+### Finish
+
+README and `docs/ARCHITECTURE.md` match the code; `docs/ai_usage.md` and
+`docs/CHANGES.md` complete; a live demo that needs no network; the user creates `v1.0`.
+
+### Optional, only after S6, one at a time, ask first
+
+O1 proof levels on cards · O2 LangGraph checkpointer and `interrupt` (after lesson 5;
+check the docs for the pinned version) · O3 GitHub Actions · O4 retrieval of fix guides
+(a seventh agent tool: needs the lecturer's written agreement) · O5 Docker for the
+behavior tests (the lecturer said a subprocess with a timeout is enough).
 
 ---
 
-## 7. Rules for every step
+## 6. Rules for every step
 
 1. **The model chooses, the application enforces.** A new rule goes in code with a
    test, never only in a prompt.
-2. **Every tool** goes through `tools/registry.py` with an allowlist entry, exact
-   argument types, a structured result, and three tests: valid input, invalid input,
-   failure.
-3. **Tests check the trace and the result, not the wording.** They never call a real
-   API and never touch the real `.work/` or `reports/`.
-4. **Keep it simple and readable.** Both students must be able to explain every line
-   in the personal explanation. Prefer 30 clear lines over a clever abstraction.
-5. **Do not report a test you did not run.** Say what you ran and what the output was.
-6. **If the code and this plan disagree, stop and ask.**
-7. **Teach while you build.** Before each step, explain in Hebrew what will change and
-   why, in a few simple sentences. After each step, ask the step's owner three short
-   questions about what was built, and wait for the answers.
-8. **Two owners.** S7 and S8 are meant for Chen; S1, S3 and S5 for Ran; the rest is
-   shared. Each PR is reviewed by the other student before the merge.
+2. **Every tool** has a contract in `tools/contracts.py`, goes through
+   `tools/registry.py`, and has the tests of M3.
+3. **Tests check traces and results, not wording.** No real API, no network, no
+   writes to the real `.work/` or `reports/`.
+4. **Mocks are marked.** The word `MOCK` in the name and a first-line comment. Never in
+   an agent allowlist.
+5. **Never invent a result.** Say what you ran and what the output was. Label every
+   number as a real-model run or a scripted run.
+6. **Keep it simple.** Ran must be able to explain every line alone in the final
+   presentation. Prefer 30 clear lines over a clever abstraction. No new dependency
+   without asking.
+7. **Runs everywhere.** Windows for development, Linux and Colab for grading, Python
+   3.12 and 3.13.
+8. **If the code and this plan disagree, stop and ask.**
+9. **Teach while building.** Before a step, explain in Hebrew what changes and why.
+   After it, ask Ran three short questions and wait for the answers.
+10. **One builder.** Ran builds the whole project. Both names still appear on every
+    document, because the course requires it for a pair submission. Do not assign work
+    to anyone else, and keep the contribution table true.
