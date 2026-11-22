@@ -274,12 +274,16 @@ flowchart LR
 | `tests/test_state.py` | טסטים לצורות הנתונים. | 🧪 |
 | `tests/test_tester.py` | טסטים לאכיפה של tester: approve חסום, retry בלי feedback, ותיקיות ריצה. | 🧪 |
 | `tests/test_tester_models.py` | טסטים למודלים של tester ולאיסוף הבדיקות. | 🧪 |
-| `tests/test_verify_tools.py` | טסטים לעותקים, ל־`rescan` (גם עם ממצאים של Bandit), ל־`run_behavior_tests`, לסביבה ול־timeout. | 🧪 |
+| `tests/test_verify_tools.py` | טסטים לעותקים, ל־`rescan` (גם עם ממצאים של Bandit), ל־`run_behavior_tests`, לסביבה ול־timeout. בדיקת הסביבה מתירה גם `LC_CTYPE` ו־`LC_ALL`, ש־Python עצמו מוסיף על Linux. | 🧪 |
 | `pytest.ini` | מגדיר ש־pytest יריץ רק את `tests/` ויוכל לייבא מודולים משורש הפרויקט. | ⚙️ |
-| `requirements.txt` | התלויות: `pytest`, ו־`langgraph==1.2.18` ו־`bandit==1.9.4` בגרסאות נעולות. | ⚙️ |
+| `requirements.txt` | התלויות בגרסאות מדויקות: `pytest==9.1.1`, ‏`langgraph==1.2.18`, ‏`bandit==1.9.4`, עם הערה על גרסאות ה־Python. בלי BOM. | ⚙️ |
+| `.env.example` | שמות המפתחות ושמות המודלים האופציונליים, כולם ריקים. מעתיקים אותו ל־`.env` (או לשמות ב־Colab Secrets). | ⚙️ |
+| `colab/devsecops_milestone1.ipynb` | המחברת היחידה בריפו: clone, התקנה, טסטים, דמו עם המודל המדומה, ודמו אופציונלי עם מודל אמיתי שמדלג כשאין מפתח. לא מכילה קוד של הפרויקט, רק מריצה אותו. | ⚙️ |
 | `.gitignore` | מונע מ־git לשמור את `.env`, ‏`.venv`, ‏`.work/`, ‏`reports/`, ‏`.idea/` ו־`.claude/tmp/`. | ⚙️ |
-| `README.md` | הוראות התקנה והרצה בעברית. | ⚙️ |
-| `CLAUDE.md` | הכללים של הפרויקט ל־Claude. | ⚙️ |
+| `README.md` | הוראות התקנה והרצה בעברית, עם כפתור "Open in Colab" ופקודת Linux ליד כל פקודת Windows. | ⚙️ |
+| `CLAUDE.md` | מפנה ל־`AGENTS.md`. | ⚙️ |
+| `AGENTS.md` | הכללים של הפרויקט ל־Claude, כולל הדרישה שהקוד ירוץ גם על Linux ב־Colab עם Python 3.12 ו־3.13. | ⚙️ |
+| `docs/BUILD_PLAN.md` | תוכנית הבנייה (גרסה 3.1): שלבי אבן דרך 1 ואחריה. | ⚙️ |
 | `docs/ARCHITECTURE.md` | המסמך הזה. | ⚙️ |
 
 ## 4. איך ריצה אחת עובדת
@@ -412,6 +416,9 @@ flowchart LR
   - ל־OpenRouter יש בערך 50 בקשות ליום.
 - **ה־tester לא הוכיח שהוא יכול להחמיר.** `north-mini-code` הוא מודל קטן, ובהרצות האמיתיות הוא אישר כל תיקון שעבר את כל הבדיקות. ההגנה האמיתית היא האכיפה של האפליקציה.
 - **ה־developer המבוסס על חוקים מוגבל.** הוא מתקן רק `hardcoded_secret`, ומחזיר `skipped` לשאר, כולל כל החוקים של Bandit.
+- **הריצה ב־Colab לא נבדקה אוטומטית.** הטסטים רצים כאן על Windows. את "Run all" ב־Colab נקי (Linux, Python 3.12 או 3.13) מריץ רן ידנית.
+- **על Linux, תהליך הבן מקבל גם משתנה locale.** כש־locale הוא C, ‏Python עצמו מוסיף `LC_CTYPE` לסביבה של עצמו. זה שם של locale ולא סוד, והאפליקציה לא מעבירה אותו.
+- **עדיין אין קובצי trace.** הדמו במחברת מדפיס את ה־trace מ־stderr (`--trace`). קובצי trace שמורים יגיעו בשלב M6.
 
 ## 7. מפת דרכים (Roadmap)
 

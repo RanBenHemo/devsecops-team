@@ -14,6 +14,7 @@ A human approves every change to the original code. The team will later check th
 - Run tests: `.venv\Scripts\python.exe -m pytest -q`
 - Install a package: `.venv\Scripts\python.exe -m pip install <name>`, then add it to `requirements.txt`.
 - Work only inside this project folder. If the safety guard blocks something, stop and tell the user. Never try to get around it.
+- The code must also run on Linux in Google Colab, with Python 3.12 and 3.13, and the tests must pass there. The lecturer grades in Colab only (`colab/devsecops_milestone1.ipynb`). Do not use features that exist only in Python 3.13 or only on Windows.
 
 ## Design rules
 - One file per agent in `agents/`, tools in `tools/`, model adapters in `models/`.

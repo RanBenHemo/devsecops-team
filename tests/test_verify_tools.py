@@ -168,7 +168,10 @@ ENV_CHECK = '''\
 import os
 
 ALLOWED = {"PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP", "SAMPLE_UNDER_TEST", "PYTHONDONTWRITEBYTECODE",
-           "PYTEST_DISABLE_PLUGIN_AUTOLOAD"}
+           "PYTEST_DISABLE_PLUGIN_AUTOLOAD",
+           # On Linux, Python itself sets these in the child when the locale is plain C (locale coercion).
+           # They hold a locale name, never a secret, and the parent does not pass them.
+           "LC_CTYPE", "LC_ALL"}
 
 
 def test_environment_is_only_the_allowlist():
