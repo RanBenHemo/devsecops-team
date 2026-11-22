@@ -1,3 +1,4 @@
-﻿pytest
+# Exact versions. Tested with Python 3.13 on Windows; must also run on Linux (Google Colab, Python 3.12 and 3.13).
+pytest==9.1.1
 langgraph==1.2.18
 bandit==1.9.4

@@ -1,26 +1,48 @@
-﻿# DevSecOps Agent Team
+# DevSecOps Agent Team
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/RanBenHemo/devsecops-team/blob/main/colab/devsecops_milestone1.ipynb)
 
 Three AI agents that check Python code for security issues:
 - Pen tester: finds weaknesses
 - Developer: proposes a fix
 - Tester: verifies that the fix works
 
-Project for the AI Agents course.
+Project for the AI Agents course. Ran Ben Hemo, Chen Kadosh.
+
+## הרצה ב־Google Colab
+
+הכפתור "Open in Colab" למעלה פותח את המחברת `colab/devsecops_milestone1.ipynb`. ב־Colab בוחרים Runtime → Run all.
+המחברת מורידה את הריפו, מתקינה את התלויות, מריצה את הטסטים ומריצה דמו עם המודל המדומה, בלי מפתח.
+התא האחרון מריץ דמו עם מודל אמיתי, רק אם יש מפתחות ב־Colab Secrets (סמל המפתח בצד שמאל), עם השמות שב־`.env.example`.
+אם אין מפתח, הוא מדפיס שהדמו דולג ולא נכשל. המחברת לא מדפיסה אף מפתח.
 
 ## התקנה והרצה
 
-יצירת סביבה וירטואלית והתקנת התלויות (Windows):
+הקוד נבדק עם Python 3.13 על Windows, וצריך לרוץ גם על Linux (Colab) עם Python 3.12 ו־3.13.
+בכל מקום למטה יש פקודה ל־Windows ופקודה ל־Linux/Colab. ב־Colab אין צורך בסביבה וירטואלית: כותבים `python` במקום `.venv/bin/python`.
+
+יצירת סביבה וירטואלית והתקנת התלויות:
 
 ```
+# Windows
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
+
+# Linux
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
 ```
 
 הרצת סוכן ה־pen_tester על קובץ:
 
 ```
+# Windows
 .venv\Scripts\python.exe main.py samples/login.py
 .venv\Scripts\python.exe main.py samples/login.py --trace
+
+# Linux
+.venv/bin/python main.py samples/login.py
+.venv/bin/python main.py samples/login.py --trace
 ```
 
 הדוח מודפס כ־JSON. עם `--trace` מודפס גם מסלול ההחלטות של הסוכן (ל־stderr).
@@ -30,7 +52,7 @@ python -m venv .venv
 ### הרצה עם מודל אמיתי (Groq)
 
 ברירת המחדל היא `--model scripted`, מודל מבוסס חוקים שלא צריך מפתח.
-כדי להשתמש במודל אמיתי, צרו בתיקיית הפרויקט קובץ בשם `.env` עם השורה:
+כדי להשתמש במודל אמיתי, העתיקו את `.env.example` לקובץ בשם `.env` בתיקיית הפרויקט, ומלאו את המפתח:
 
 ```
 GROQ_API_KEY=המפתח-שלכם
@@ -38,10 +60,16 @@ GROQ_API_KEY=המפתח-שלכם
 
 אפשר להוסיף גם `GROQ_MODEL=<model id>` כדי לבחור מודל אחר (ברירת המחדל: `openai/gpt-oss-120b`).
 הקובץ `.env` מופיע ב־`.gitignore`, ולכן לא ייכנס ל־git. לעולם אל תכתבו את המפתח בקוד.
+ב־Colab שמים את אותם שמות ב־Colab Secrets במקום ב־`.env`.
 
 ```
+# Windows
 .venv\Scripts\python.exe main.py samples/login.py --model llm
 .venv\Scripts\python.exe main.py samples/login.py --model llm --trace
+
+# Linux
+.venv/bin/python main.py samples/login.py --model llm
+.venv/bin/python main.py samples/login.py --model llm --trace
 ```
 
 המודל נותן לכל ממצא `verdict` (`real` או `false_positive`) ונימוק קצר.
@@ -56,7 +84,11 @@ GROQ_API_KEY=המפתח-שלכם
 (`partial proof: no attack test`). קובץ הדוגמה `samples/bandit_cases.py` מכיל חמישה ממצאים כאלה.
 
 ```
+# Windows
 .venv\Scripts\python.exe main.py samples/bandit_cases.py
+
+# Linux
+.venv/bin/python main.py samples/bandit_cases.py
 ```
 
 ### הצעת תיקונים (`--fix`)
@@ -65,8 +97,13 @@ GROQ_API_KEY=המפתח-שלכם
 ממצאי `false_positive` לא נשלחים אליו. הסוכן לא משנה את הקובץ המקורי. כל הצעה היא diff נפרד מול הקובץ המקורי, ואדם מחליט מה להחיל.
 
 ```
+# Windows
 .venv\Scripts\python.exe main.py samples/login.py --fix
 .venv\Scripts\python.exe main.py samples/login.py --fix --model llm --trace
+
+# Linux
+.venv/bin/python main.py samples/login.py --fix
+.venv/bin/python main.py samples/login.py --fix --model llm --trace
 ```
 
 הפלט הוא `{"findings_report": ..., "fix_report": ...}`. קוד יציאה 2 גם אם ריצת ה־developer נכשלה.
@@ -99,8 +136,13 @@ GEMINI_API_KEY=המפתח-שלכם
 בסוף הריצה האפליקציה מוחקת את תיקיית הריצה שלה. עם `--keep-work` התיקייה נשארת.
 
 ```
+# Windows
 .venv\Scripts\python.exe main.py samples/login.py --verify
 .venv\Scripts\python.exe main.py samples/injection.py --verify --model llm --trace
+
+# Linux
+.venv/bin/python main.py samples/login.py --verify
+.venv/bin/python main.py samples/injection.py --verify --model llm --trace
 ```
 
 הפלט כולל גם `verification_report`. קוד יציאה 2 גם אם ריצת ה־tester נכשלה.
@@ -119,8 +161,13 @@ OPENROUTER_API_KEY=המפתח-שלכם
 אם ה־tester מחזיר `retry`, ה־developer מקבל את ה־feedback ומנסה שוב.
 
 ```
+# Windows
 .venv\Scripts\python.exe main.py review samples/login.py
 .venv\Scripts\python.exe main.py review samples/login.py --model llm --trace
+
+# Linux
+.venv/bin/python main.py review samples/login.py
+.venv/bin/python main.py review samples/login.py --model llm --trace
 ```
 
 התוצאה היא כרטיסי החלטה ב־`reports/<file>-<זמן>.json` וב־`.md` (התיקייה לא נכנסת ל־git).
@@ -132,7 +179,11 @@ OPENROUTER_API_KEY=המפתח-שלכם
 רק אדם מחיל תיקונים, ורק אחרי שקרא את הכרטיסים:
 
 ```
+# Windows
 .venv\Scripts\python.exe main.py apply reports/login-20261027-120000.json --ids F1,F2
+
+# Linux
+.venv/bin/python main.py apply reports/login-20261027-120000.json --ids F1,F2
 ```
 
 apply מסרב (קוד יציאה 3, עם סיבה) במקרים האלה:
@@ -159,10 +210,19 @@ apply מסרב (קוד יציאה 3, עם סיבה) במקרים האלה:
 שגיאות כמו 400/401/403/404 לא חוזרות על עצמן. ל־Gemini יש גם מרווח של 4 שניות לפחות בין בקשות
 (`MIN_REQUEST_INTERVAL` ב־`config.py`). כל ניסיון חוזר נרשם ב־trace (מספר הניסיון והסטטוס בלבד).
 
-הרצת הטסטים:
+## הרצת הטסטים
+
+פקודה אחת, בלי מפתח, בלי רשת ובלי עלות (המודלים בטסטים מדומים):
 
 ```
+# Windows
 .venv\Scripts\python.exe -m pytest -q
+
+# Linux
+.venv/bin/python -m pytest -q
+
+# Colab
+!python -m pytest -q
 ```
 
 הממצאים הצפויים לכל קובץ דוגמה מופיעים ב־`samples/EXPECTED.md`.
